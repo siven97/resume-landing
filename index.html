@@ -306,6 +306,7 @@ section{padding:100px 0}
 .skill-card h3{font-size:1.15rem;font-weight:700;margin-bottom:22px;display:flex;align-items:center;gap:10px}
 .skill-card h3 .icon{width:8px;height:8px;border-radius:50%;background:var(--c-accent3);box-shadow:0 0 12px var(--c-accent3-glow)}
 .radar-wrap{position:relative;width:100%;aspect-ratio:1/1;max-width:400px;margin:0 auto}
+#radarCanvas{width:100%;height:100%;display:block}
 .radar-center{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none
 }
@@ -922,74 +923,101 @@ document.querySelectorAll('.skill-bar').forEach(bar=>barObserver.observe(bar));
   const canvas = document.getElementById('radarCanvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
-  const dpr = Math.min(window.devicePixelRatio||1,2);
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  ctx.scale(dpr,dpr);
-  const w = rect.width, h = rect.height;
-  const cx = w/2, cy = h/2 + 4;
-  const radius = Math.min(w,h)/2 - 44;
+  const wrap = canvas.parentElement;
   const labels = ['Python & AI','Java 后端','小程序开发','系统运维','产品管理','数据分析'];
   const values = [88,82,88,86,78,74];
   const total = labels.length;
   const angle = i => -Math.PI/2 + i * 2 * Math.PI / total;
 
-  function drawGrid(){
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 1;
-    for(let r=1;r<=5;r++){
+  function render(){
+    const dpr = Math.min(window.devicePixelRatio||1,2);
+    // 以容器 radar-wrap 的实际尺寸为准，避免 canvas 溢出或标签错位
+    const rect = wrap.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    if(w < 10 || h < 10) return;
+    canvas.width = Math.max(1, Math.floor(w * dpr));
+    canvas.height = Math.max(1, Math.floor(h * dpr));
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(dpr,dpr);
+    ctx.clearRect(0,0,w,h);
+
+    const cx = w/2, cy = h/2 + 2;
+    // 留出充足边距给标签，防止文字被右侧/底部卡片边缘裁剪
+    const radius = Math.max(40, Math.min(w,h)/2 - 56);
+
+    function drawGrid(){
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      for(let r=1;r<=5;r++){
+        ctx.beginPath();
+        for(let i=0;i<total;i++){
+          const a = angle(i), rr = radius * r / 5;
+          const x = cx + Math.cos(a)*rr, y = cy + Math.sin(a)*rr;
+          if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.closePath();ctx.stroke();
+      }
+      for(let i=0;i<total;i++){
+        const a = angle(i);
+        ctx.beginPath();
+        ctx.moveTo(cx,cy);
+        ctx.lineTo(cx + Math.cos(a)*radius, cy + Math.sin(a)*radius);
+        ctx.stroke();
+      }
+    }
+    function drawLabels(){
+      ctx.fillStyle = 'rgba(240,240,248,0.65)';
+      ctx.font = '600 12px "-apple-system", "PingFang SC", sans-serif';
+      ctx.textBaseline = 'middle';
+      const labelOffset = radius + 20;
+      for(let i=0;i<total;i++){
+        const a = angle(i);
+        const x = cx + Math.cos(a)*labelOffset;
+        const y = cy + Math.sin(a)*labelOffset;
+        // 根据角度选择对齐方式，避免文字被卡片边缘裁剪
+        if(Math.abs(Math.cos(a)) < 0.3){
+          ctx.textAlign = 'center';
+        } else if(Math.cos(a) > 0){
+          ctx.textAlign = 'left';
+        } else {
+          ctx.textAlign = 'right';
+        }
+        ctx.fillText(labels[i],x,y);
+      }
+    }
+    function drawData(){
       ctx.beginPath();
       for(let i=0;i<total;i++){
-        const a = angle(i), rr = radius * r / 5;
-        const x = cx + Math.cos(a)*rr, y = cy + Math.sin(a)*rr;
+        const a = angle(i), r = radius * values[i] / 100;
+        const x = cx + Math.cos(a)*r, y = cy + Math.sin(a)*r;
         if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
       }
-      ctx.closePath();ctx.stroke();
-    }
-    for(let i=0;i<total;i++){
-      const a = angle(i);
-      ctx.beginPath();
-      ctx.moveTo(cx,cy);
-      ctx.lineTo(cx + Math.cos(a)*radius, cy + Math.sin(a)*radius);
+      ctx.closePath();
+      const grad = ctx.createRadialGradient(cx,cy,0,cx,cy,radius);
+      grad.addColorStop(0,'rgba(108,92,231,0.25)');
+      grad.addColorStop(1,'rgba(0,206,201,0.25)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.strokeStyle = '#6C5CE7';
+      ctx.lineWidth = 2;
       ctx.stroke();
+      for(let i=0;i<total;i++){
+        const a = angle(i), r = radius * values[i] / 100;
+        const x = cx + Math.cos(a)*r, y = cy + Math.sin(a)*r;
+        ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
+        ctx.fillStyle = '#00CEC9';ctx.fill();
+        ctx.strokeStyle = '#fff';ctx.lineWidth = 1.5;ctx.stroke();
+      }
     }
+    drawGrid();drawLabels();drawData();
   }
-  function drawLabels(){
-    ctx.fillStyle = 'rgba(240,240,248,0.55)';
-    ctx.font = '600 12px "-apple-system", "PingFang SC", sans-serif';
-    ctx.textAlign = 'center';ctx.textBaseline = 'middle';
-    for(let i=0;i<total;i++){
-      const a = angle(i);
-      const x = cx + Math.cos(a)*(radius+28), y = cy + Math.sin(a)*(radius+28);
-      ctx.fillText(labels[i],x,y);
-    }
-  }
-  function drawData(){
-    ctx.beginPath();
-    for(let i=0;i<total;i++){
-      const a = angle(i), r = radius * values[i] / 100;
-      const x = cx + Math.cos(a)*r, y = cy + Math.sin(a)*r;
-      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    }
-    ctx.closePath();
-    const grad = ctx.createRadialGradient(cx,cy,0,cx,cy,radius);
-    grad.addColorStop(0,'rgba(108,92,231,0.25)');
-    grad.addColorStop(1,'rgba(0,206,201,0.25)');
-    ctx.fillStyle = grad;
-    ctx.fill();
-    ctx.strokeStyle = '#6C5CE7';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    for(let i=0;i<total;i++){
-      const a = angle(i), r = radius * values[i] / 100;
-      const x = cx + Math.cos(a)*r, y = cy + Math.sin(a)*r;
-      ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
-      ctx.fillStyle = '#00CEC9';ctx.fill();
-      ctx.strokeStyle = '#fff';ctx.lineWidth = 1.5;ctx.stroke();
-    }
-  }
-  drawGrid();drawLabels();drawData();
+
+  render();
+  let resizeTimer;
+  window.addEventListener('resize',()=>{
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render,120);
+  });
 })();
 
 // ===== Project card spotlight effect =====
